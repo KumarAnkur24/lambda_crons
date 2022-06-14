@@ -10,6 +10,10 @@ from service.base_functions import msg_to
 from datetime import datetime, timedelta
 from service.send_mail_client import send_email
 
+#Created By: Akchansh Kumar
+#Description : Appointment Tag summary for date range 1-7,8-14,15-21,21-last_day
+
+
 logger = logging.getLogger(__name__)
 
 READ_DB_USER = os.environ.get('READ_DB_USER', '')
@@ -20,11 +24,10 @@ fpath = os.path.join('/tmp', 'ayuM_app_track_confirmed.csv')
 # fpath1 = os.path.join('/tmp', 'ayuM_app_track_patient_reached.csv')
 
 yesterday = datetime.now() + timedelta(hours=5, minutes=30, days=-1)
-yesterday = yesterday.strftime('%Y-%m-%d')
 
-today = datetime.now() + timedelta(hours=5, minutes=30)
-month = today.month
-today = today.day
+today_date = datetime.now() + timedelta(hours=5, minutes=30)
+month = today_date.month
+today = today_date.day
 
 if month in (1, 3, 5, 7, 8, 10, 12):
     if today == 7:
@@ -95,8 +98,8 @@ queries = {
                             ldc.id in (select distinct id 
                                     from lead_doctor_consultation_AUD
                                     where 
-                                        date(appointmentDate) = '{start}'
-                                        and date(appointmentDate) = '{end}'
+                                        date(appointmentDate) >= '{start}'
+                                        and date(appointmentDate) <= '{end}' 
                                         and doctorConsultationStatus = 2) 
                             and afp.cityId in (2)
                             order by ldc.id desc
@@ -108,7 +111,7 @@ queries = {
                             from lead_doctor_consultation_AUD ldc
                                 where 
                                     ldc.id in ({id}) 
-                                    order by createdOn
+                                order by ldc.createdOn 
             ''',
     "app_tags": """select e.entityId as 'id',a.tagName as tagName,
                             date_add(e.createdOn, INTERVAL '5:30' HOUR_MINUTE) as 'createdOn',
@@ -144,6 +147,11 @@ DoctorConsultationStatus = {
     '7': 'APPOINTMENT_STARTED'
 }
 
+start_day = start_day.strftime('%Y-%m-%d')
+end_day = end_day.strftime('%Y-%m-%d')
+
+print(start_day, end_day)
+
 
 def fetch_data(conn):
     fetched_val = {}
@@ -153,6 +161,7 @@ def fetch_data(conn):
             fetched_val[lookup] = fetch_record(conn, query.format(start=start_day, end=end_day))
             caseIds = [str(x['id']) for x in fetched_val[lookup]]
 
+            print(caseIds)
 
         elif lookup in ('appointment', 'app_tags', 'app_done'):
 
@@ -581,16 +590,19 @@ def lambda_handler(event, context):
             # result_1_BLR = select_data(confirmed_cases_new_BLR, 'New Appointments')
 
             confirmed_cases.to_csv(fpath)
-        if today == end_day:
+
+        print(today_date.strftime('%Y-%m-%d') == end_day)
+
+        if today_date.strftime('%Y-%m-%d') == end_day:
             # BLR
             Result = result_1
             Subject = "BLR | Ayu M Tags Add Tracking | Confirmed Cases | <{0}>-<{1}>".format(start_day, end_day)
-            # email_recipient_list = ["city-managers-leads@ayu.health"]
-            email_recipient_list = ['ankur@ayu.health', 'akchansh@ayu.health']
+            email_recipient_list = ["city-managers-leads@ayu.health"]
+            # email_recipient_list = ['akchansh@ayu.health']
             send_email(None, email_recipient_list, Subject, None, Result, [fpath])
 
     except Exception as e:
-        Subject = 'confirmed_appts_tags_summary_weekly ERROR'
+        Subject = 'confirmed_appts_tags_summary ERROR'
         email_recipient_list = ['analytics@ayu.health']
         send_email(None, email_recipient_list, Subject, None, e, [])
         raise e

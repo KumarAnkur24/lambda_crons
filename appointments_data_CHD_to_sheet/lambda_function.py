@@ -14,16 +14,13 @@ from write_to_gsheet import clear_and_write_to_sheet
 
 logger = logging.getLogger(__name__)
 
-#Created By: Akchansh Kumar
-#Description : Sends data to sheet for new admissions for chd
-
 READ_DB_USER = os.environ.get('READ_DB_USER', '')
 READ_DB_PASSWORD = os.environ.get('READ_DB_PASSWORD', '')
 READ_DB_DOMAIN_URL = os.environ.get('READ_DB_DOMAIN_URL', '')
 
 queries = {'appointment': '''select ldc.id , ldc.leadId , ldc.appointmentDate , month(ldc.appointmentDate) as appt_month , year(ldc.appointmentDate) as appt_Year,pc.leadSource,
                                     ldc.doctorConsultationStatus, ldc.appointmentCreationType , dp.name as DoctorName ,afp.aliasName as HospitalName , ayuMitraId ,
-                                    pp.patientName , cp.customerNumber ,ldc.consultationType , ldc.consultationFee ,
+                                    pp.patientName , cp.customerNumber ,ldc.consultationType , ldc.consultationFee , pp.id as ppID ,
                             case when pcp.cityName = 'Chandigarh' then 'CHD'
                                 when pcp.cityName = 'Bangalore' then 'BLR'
                                 when pcp.cityName is not null then pcp.cityName
@@ -44,6 +41,7 @@ queries = {'appointment': '''select ldc.id , ldc.leadId , ldc.appointmentDate , 
                             where 
                                 ldc.appointmentCreationType in ('NEW_APPOINTMENT','RESCHEDULED_APPOINTMENT')
                                 and ldc.tenantName = 'AYU'
+                                and date(appointmentDate) = curdate()  
 
 
 ''',
@@ -110,10 +108,12 @@ def lambda_handler(event, context):
 
         appointment_chd = appointment[appointment['city'] == 'CHD']
 
+        print(appointment_chd.columns)
+
         data = [['Appt_id', 'leadId', 'appointmentDate', 'appt_month', 'appt_Year', 'leadSource', 'PatientName',
                  'CustomerNumber', 'ConsultationType', 'ConsultationFee',
                  'Doctor_Consultation_Status', 'appointmentCreationType', 'DoctorName', 'HospitalName',
-                 'ayu_mitra', 'city']]
+                 'ayu_mitra', 'city', 'link']]
 
         for index, val in appointment_chd.iterrows():
             data.append([
@@ -132,15 +132,16 @@ def lambda_handler(event, context):
                 val['DoctorName'],
                 val['HospitalName'],
                 val['ayu_mitra'],
-                val['city']
+                val['city'],
+                'https://amigos.ayu.health/patient/{0}/case/{1}'.format(val['ppID'], val['leadId'])
             ])
 
-        clear_and_write_to_sheet('1ffoL_pwPF_oxbMLEtWQfwSQ2SiLd0LKumOKz2_wUwOo', 'New_Appointment_CHD', 'A1:P', data)
+        clear_and_write_to_sheet('1ffoL_pwPF_oxbMLEtWQfwSQ2SiLd0LKumOKz2_wUwOo', 'New_Appointment_CHD', 'A1:Q', data)
 
         print(data)
 
     except Exception as e:
         Subject = 'appointments_data_CHD_to_sheet ERROR'
         email_recipient_list = ['analytics@ayu.health']
-        send_email(None, email_recipient_list, Subject, None, e, [])
+        # send_email(None, email_recipient_list, Subject, None, e , [])
         raise e
